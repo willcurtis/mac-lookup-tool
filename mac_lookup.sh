@@ -25,10 +25,33 @@ rawurlencode() {
   echo "$encoded"
 }
 
-# Validate MAC address format
+# Normalize MAC address to AA:BB:CC or AA:BB:CC:DD:EE:FF
+normalize_mac() {
+  local input="$1"
+  local clean
+  clean=$(echo "$input" | tr '[:lower:]' '[:upper:]' | tr -d ':-.')
+
+  if [[ ${#clean} -lt 6 ]]; then
+    echo "Invalid MAC: Too short"
+    return 1
+  fi
+
+  if [[ ${#clean} -ge 12 ]]; then
+    # Full MAC
+    printf "%s:%s:%s:%s:%s:%s\n" \
+      "${clean:0:2}" "${clean:2:2}" "${clean:4:2}" \
+      "${clean:6:2}" "${clean:8:2}" "${clean:10:2}"
+  else
+    # OUI only
+    printf "%s:%s:%s\n" \
+      "${clean:0:2}" "${clean:2:2}" "${clean:4:2}"
+  fi
+}
+
+# Validate normalized MAC address
 validate_mac() {
   local mac="$1"
-  [[ "$mac" =~ ^([0-9A-Fa-f]{2}[:\-]){5}([0-9A-Fa-f]{2})$ ]]
+  [[ "$mac" =~ ^([0-9A-F]{2}:){2,5}[0-9A-F]{2}$ ]]
 }
 
 # Lookup vendor via API or cache
@@ -99,15 +122,19 @@ main() {
 
   if [[ -f "$input" ]]; then
     while IFS= read -r line; do
-      mac=$(echo "$line" | tr '[:lower:]' '[:upper:]' | tr -d '\r\n')
-      validate_mac "$mac" && lookup_mac_vendor "$mac" "$json_output"
+      mac=$(normalize_mac "$line")
+      if validate_mac "$mac"; then
+        lookup_mac_vendor "$mac" "$json_output"
+      else
+        echo "Invalid MAC address: $line"
+      fi
     done < "$input"
   else
-    mac=$(echo "$input" | tr '[:lower:]' '[:upper:]')
+    mac=$(normalize_mac "$input")
     if validate_mac "$mac"; then
       lookup_mac_vendor "$mac" "$json_output"
     else
-      echo "Invalid MAC address: $mac"
+      echo "Invalid MAC address: $input"
       exit 1
     fi
   fi
