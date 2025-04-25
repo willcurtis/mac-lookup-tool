@@ -36,31 +36,24 @@ lookup_mac_vendor() {
   local mac="$1"
   local json_output="$2"
 
-  echo "DEBUG: Lookup MAC=[$mac]"
-
   local cached
   cached=$(grep -i "^$mac|" "$CACHE_FILE" | head -n1)
   if [[ -n "$cached" ]]; then
-    echo "DEBUG: Found in cache: $cached"
     local vendor="${cached#*|}"
-    output_result "$mac" "$vendor" "$json_output"
-    return
+    if [[ -n "$vendor" ]]; then
+      output_result "$mac" "$vendor" "$json_output"
+      return
+    fi
   fi
 
   local encoded
   encoded=$(rawurlencode "$mac")
-  echo "DEBUG: Encoded MAC=[$encoded]"
 
   local response http_code body
 
   response=$(curl -s -w "\n%{http_code}" "$API_URL_BASE/$encoded")
-  echo "DEBUG: Raw response=[$response]"
-
   http_code=$(printf "%s" "$response" | tail -n1)
   body=$(printf "%s" "$response" | sed '$d')
-
-  echo "DEBUG: Parsed HTTP code=[$http_code]"
-  echo "DEBUG: Parsed body=[$body]"
 
   if [[ "$http_code" -ne 200 || -z "$body" ]]; then
     echo "MAC: $mac"
