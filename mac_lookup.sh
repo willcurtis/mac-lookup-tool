@@ -25,13 +25,13 @@ rawurlencode() {
   echo "$encoded"
 }
 
-# Check MAC format
+# Validate MAC address
 validate_mac() {
   local mac="$1"
   [[ "$mac" =~ ^([0-9A-Fa-f]{2}[:\-]){5}([0-9A-Fa-f]{2})$ ]]
 }
 
-# Lookup MAC vendor via API or cache
+# Lookup vendor via API or cache
 lookup_mac_vendor() {
   local mac="$1"
   local json_output="$2"
@@ -46,27 +46,19 @@ lookup_mac_vendor() {
 
   local encoded
   encoded=$(rawurlencode "$mac")
-  local response http_code attempt=0
+  local response http_code body
 
-  while (( attempt < RETRIES )); do
-    response=$(curl -s -w "\n%{http_code}" "$API_URL_BASE/$encoded")
-    http_code=$(tail -n1 <<< "$response")
-    body=$(head -n-1 <<< "$response")
+  response=$(curl -s -w "\n%{http_code}" "$API_URL_BASE/$encoded")
+  http_code=$(printf "%s" "$response" | tail -n1)
+  body=$(printf "%s" "$response" | sed '$d')
 
-    if [[ "$http_code" -eq 200 ]]; then
-      echo "$mac|$body" >> "$CACHE_FILE"
-      output_result "$mac" "$body" "$json_output"
-      return
-    elif [[ "$http_code" -eq 404 ]]; then
-      output_result "$mac" "Not Found" "$json_output"
-      return
-    fi
-
-    (( attempt++ ))
-    sleep "$RETRY_DELAY"
-  done
-
-  output_result "$mac" "Error contacting API" "$json_output"
+  if [[ "$http_code" -ne 200 || -z "$body" ]]; then
+    echo "MAC: $mac"
+    echo "Vendor: Not Found (HTTP $http_code)"
+  else
+    echo "$mac|$body" >> "$CACHE_FILE"
+    output_result "$mac" "$body" "$json_output"
+  fi
 }
 
 # Print output in plain or JSON format
@@ -84,16 +76,17 @@ output_result() {
   fi
 }
 
-# Handle either a single MAC or a file of MACs
+# Entry point
 main() {
   local input=""
   local json_output="false"
 
   for arg in "$@"; do
-    case "$arg" in
-      --json) json_output="true" ;;
-      *) input="$arg" ;;
-    esac
+    if [[ "$arg" == "--json" ]]; then
+      json_output="true"
+    elif [[ -z "$input" ]]; then
+      input="$arg"
+    fi
   done
 
   if [[ -z "$input" ]]; then
@@ -117,26 +110,4 @@ main() {
   fi
 }
 
-main "$1" "$2"
-
-    echo "Usage: $0 <MAC address or file> [--json]"
-    exit 1
-  fi
-
-  if [[ -f "$input" ]]; then
-    while IFS= read -r line; do
-      mac=$(echo "$line" | tr '[:lower:]' '[:upper:]' | tr -d '\r\n')
-      validate_mac "$mac" && lookup_mac_vendor "$mac" "$json_output"
-    done < "$input"
-  else
-    mac=$(echo "$input" | tr '[:lower:]' '[:upper:]')
-    if validate_mac "$mac"; then
-      lookup_mac_vendor "$mac" "$json_output"
-    else
-      echo "Invalid MAC address: $mac"
-      exit 1
-    fi
-  fi
-}
-
-main "$1" "$2"
+main "$@"
