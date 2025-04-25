@@ -45,6 +45,14 @@ The script caches results in `~/.cache/mac_lookup_cache` to speed up future look
 - `bash`
 - `curl`
 
+### Install via Homebrew:
+
+```bash
+brew tap willcurtis/tools
+brew install mac-lookup-tool
+```
+
+
 ## License
 
 MIT – see [LICENSE](LICENSE) for details.
