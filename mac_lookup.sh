@@ -49,17 +49,18 @@ lookup_mac_vendor() {
   local response http_code attempt=0
 
   while (( attempt < RETRIES )); do
-	response=$(curl -s -w "\n%{http_code}" "$API_URL_BASE/$encoded")
-	http_code=$(printf "%s" "$response" | tail -n1)
-	body=$(printf "%s" "$response" | sed '$d')
+    response=$(curl -s -w "\n%{http_code}" "$API_URL_BASE/$encoded")
+    http_code=$(tail -n1 <<< "$response")
+    body=$(head -n-1 <<< "$response")
 
-if [[ "$http_code" -ne 200 || -z "$body" ]]; then
-    echo "MAC: $mac"
-    echo "Vendor: Not Found (HTTP $http_code)"
-else
-    echo "$mac|$body" >> "$CACHE_FILE"
-    output_result "$mac" "$body" "$json_output"
-fi
+    if [[ "$http_code" -eq 200 ]]; then
+      echo "$mac|$body" >> "$CACHE_FILE"
+      output_result "$mac" "$body" "$json_output"
+      return
+    elif [[ "$http_code" -eq 404 ]]; then
+      output_result "$mac" "Not Found" "$json_output"
+      return
+    fi
 
     (( attempt++ ))
     sleep "$RETRY_DELAY"
@@ -89,6 +90,28 @@ main() {
   local json_output="$2"
 
   if [[ -z "$input" ]]; then
+    echo "Usage: $0 <MAC address or file> [--json]"
+    exit 1
+  fi
+
+  if [[ -f "$input" ]]; then
+    while IFS= read -r line; do
+      mac=$(echo "$line" | tr '[:lower:]' '[:upper:]' | tr -d '\r\n')
+      validate_mac "$mac" && lookup_mac_vendor "$mac" "$json_output"
+    done < "$input"
+  else
+    mac=$(echo "$input" | tr '[:lower:]' '[:upper:]')
+    if validate_mac "$mac"; then
+      lookup_mac_vendor "$mac" "$json_output"
+    else
+      echo "Invalid MAC address: $mac"
+      exit 1
+    fi
+  fi
+}
+
+main "$1" "$2"
+
     echo "Usage: $0 <MAC address or file> [--json]"
     exit 1
   fi
