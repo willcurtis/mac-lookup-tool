@@ -86,8 +86,15 @@ output_result() {
 
 # Handle either a single MAC or a file of MACs
 main() {
-  local input="$1"
-  local json_output="$2"
+  local input=""
+  local json_output="false"
+
+  for arg in "$@"; do
+    case "$arg" in
+      --json) json_output="true" ;;
+      *) input="$arg" ;;
+    esac
+  done
 
   if [[ -z "$input" ]]; then
     echo "Usage: $0 <MAC address or file> [--json]"
