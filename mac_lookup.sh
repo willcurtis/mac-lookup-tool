@@ -49,9 +49,9 @@ lookup_mac_vendor() {
   local response http_code attempt=0
 
   while (( attempt < RETRIES )); do
-    response=$(curl -s -w "%{http_code}" "$API_URL_BASE/$encoded")
-	http_code="${response: -3}"
-	body="${response:0:${#response}-3}"
+    response=$(curl -s -w "@-" "$API_URL_BASE/$encoded" <<<'\n%{http_code}')
+	http_code=$(echo "$response" | tail -n1)
+	body=$(echo "$response" | sed '$d')
 
     if [[ "$http_code" -eq 200 ]]; then
       echo "$mac|$body" >> "$CACHE_FILE"
