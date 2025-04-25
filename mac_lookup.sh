@@ -49,18 +49,17 @@ lookup_mac_vendor() {
   local response http_code attempt=0
 
   while (( attempt < RETRIES )); do
-    response=$(curl -s -w "\n%{http_code}" "$API_URL_BASE/$encoded")
+	response=$(curl -s -w "\n%{http_code}" "$API_URL_BASE/$encoded")
 	http_code=$(printf "%s" "$response" | tail -n1)
 	body=$(printf "%s" "$response" | sed '$d')
 
-    if [[ "$http_code" -eq 200 ]]; then
-      echo "$mac|$body" >> "$CACHE_FILE"
-      output_result "$mac" "$body" "$json_output"
-      return
-    elif [[ "$http_code" -eq 404 ]]; then
-      output_result "$mac" "Not Found" "$json_output"
-      return
-    fi
+if [[ "$http_code" -ne 200 || -z "$body" ]]; then
+    echo "MAC: $mac"
+    echo "Vendor: Not Found (HTTP $http_code)"
+else
+    echo "$mac|$body" >> "$CACHE_FILE"
+    output_result "$mac" "$body" "$json_output"
+fi
 
     (( attempt++ ))
     sleep "$RETRY_DELAY"
